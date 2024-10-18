@@ -1,13 +1,10 @@
 package com.abdushakoor12.image_file_caching_playground
 
-import android.os.Build.VERSION.SDK_INT
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,25 +13,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import coil3.ImageLoader
 import coil3.compose.AsyncImage
-import coil3.compose.rememberAsyncImagePainter
-import coil3.gif.GifDecoder
+import coil3.request.ImageRequest
 import com.abdushakoor12.image_file_caching_playground.ui.theme.Image_file_caching_playgroundTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
-
-    private val imageDownloader by lazy {
-        ImageDownloader(this.applicationContext)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,23 +46,6 @@ class MainActivity : ComponentActivity() {
 fun Home() {
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
 
-        val context = LocalContext.current
-        val imageLoader = ImageLoader.Builder(context)
-            .components {
-                add(GifDecoder.Factory())
-            }
-            .build()
-
-        val painter = rememberAsyncImagePainter(
-            "https://cdn.pixabay.com/photo/2017/11/14/00/28/wormwood-some-competition-2947198_640.jpg",
-            imageLoader = imageLoader
-        )
-
-        val gifPainter = rememberAsyncImagePainter(
-            "https://user-images.githubusercontent.com/74038190/212281763-e6ecd7ef-c4aa-45b6-a97c-f33f6bb592bd.gif",
-            imageLoader = imageLoader
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -76,8 +53,8 @@ fun Home() {
                 .verticalScroll(rememberScrollState()),
         ) {
 
-            Image(
-                painter,
+            CachedNetworkImage(
+                "https://picsum.photos/id/1003/200/300?grayscale",
                 contentDescription = null,
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier
@@ -85,15 +62,75 @@ fun Home() {
                     .height(200.dp)
             )
 
-            Image(
-                gifPainter,
+            CachedNetworkImage(
+                "https://user-images.githubusercontent.com/74038190/212281763-e6ecd7ef-c4aa-45b6-a97c-f33f6bb592bd.gif",
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
             )
 
+            CachedNetworkImage(
+                "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExcHdzbTZtdzJkaXppdjlreTVxeWd1dXBuZ2xobW41Zmp0b21rcmx4MyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/gw3IWyGkC0rsazTi/200.webp",
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+            )
 
         }
     }
+}
+
+@Composable
+fun CachedNetworkImage(
+    url: String,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    contentScale: ContentScale = ContentScale.Fit,
+) {
+    var loading by remember(url) { mutableStateOf(true) }
+    var imageType by remember { mutableStateOf<ImageType>(ImageType.NetworkImage(url)) }
+    val context = LocalContext.current
+    val imageDownloader = ((context as Activity).application as App).imageDownloader
+
+
+    LaunchedEffect(url) {
+        imageDownloader.getCachedFile(url)?.let {
+            imageType = ImageType.FileImage(it)
+            loading = false
+        } ?: run {
+            imageDownloader.downloadImage(url).let {
+                when (it) {
+                    is Either.Left -> {
+                        loading = false
+                    }
+
+                    is Either.Right -> {
+                        imageType = ImageType.FileImage(it.value)
+                        loading = false
+                    }
+                }
+            }
+        }
+    }
+
+    val imageUri: String = imageType.uri
+
+    if (!loading) {
+        AsyncImage(
+            model = ImageRequest.Builder(context).data(imageUri)
+                .build(),
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = contentScale,
+        )
+    }
+}
+
+sealed class ImageType(
+    val uri: String
+) {
+    data class NetworkImage(val link: String) : ImageType(link)
+    data class FileImage(val file: File) : ImageType(file.path)
 }

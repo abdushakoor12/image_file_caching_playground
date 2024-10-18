@@ -18,7 +18,7 @@ class ImageDownloader(
         dir.mkdir()
     }
 
-    private suspend fun downloadImage(url: String): Either<Exception, File> {
+    suspend fun downloadImage(url: String): Either<Exception, File> {
         return withContext(Dispatchers.IO) {
             try {
                 val cachedFile = getCachedFile(url)
@@ -53,7 +53,7 @@ class ImageDownloader(
         return ImageExtension.BIN
     }
 
-    private suspend fun getCachedFile(url: String): File? {
+    suspend fun getCachedFile(url: String): File? {
         return withContext(Dispatchers.IO) {
             val hashedName = url.toHash().toString()
             val files = dir.listFiles()
